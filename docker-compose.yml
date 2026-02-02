@@ -1,0 +1,71 @@
+services:
+  # БДшка
+  db:
+    image: postgres:17 # Для 18 нужна другая файловая структура
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U home -d vk_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - logger.level=WARN
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Единовременная загруузка данных
+  ingestor:
+    build: .
+    command: python scripts/ingest.py
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./data/source.csv:/app/data/source.csv:ro
+
+  backfill:
+    build: .
+    command: python scripts/backfill.py
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      ingestor:
+        condition: service_completed_successfully
+    env_file: .env
+
+  # Приложение FastAPI и outbox
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      backfill:
+        condition: service_completed_successfully # Ждём загрузки данных
+    env_file: .env
+
+volumes:
+  pgdata:

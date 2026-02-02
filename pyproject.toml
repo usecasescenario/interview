@@ -1,0 +1,14 @@
+[project]
+name = "finale"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "aiohttp>=3.13.3",
+    "asyncpg>=0.31.0",
+    "elasticsearch>=9.2.1",
+    "fastapi>=0.128.0",
+    "pydantic-settings>=2.12.0",
+    "uvicorn>=0.40.0",
+]
